@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 
 import { theme } from '@/theme';
@@ -10,7 +10,7 @@ type ConfettiBurstProps = {
 };
 
 export function ConfettiBurst({ active = true }: ConfettiBurstProps) {
-  const fall = useRef(new Animated.Value(0)).current;
+  const [fall] = useState(() => new Animated.Value(0));
   const pieces = useMemo(
     () =>
       Array.from({ length: 32 }, (_, index) => ({

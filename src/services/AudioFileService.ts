@@ -32,6 +32,6 @@ export async function deleteIfExists(uri?: string) {
   }
 }
 
-export async function deleteMany(uris: Array<string | undefined>) {
+export async function deleteMany(uris: (string | undefined)[]) {
   await Promise.all(uris.filter(Boolean).map((uri) => deleteIfExists(uri)));
 }

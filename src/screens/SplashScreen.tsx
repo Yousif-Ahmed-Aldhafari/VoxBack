@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,7 +10,7 @@ const bars = [12, 28, 44, 26, 58, 38, 24, 50, 32, 16, 46, 30];
 
 export function SplashScreen() {
   const router = useRouter();
-  const pulse = useRef(new Animated.Value(0)).current;
+  const [pulse] = useState(() => new Animated.Value(0));
   const tutorialSeen = useSettingsStore((state) => state.tutorialSeen);
 
   useEffect(() => {

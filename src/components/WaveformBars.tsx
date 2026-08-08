@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 
 import { theme } from '@/theme';
@@ -12,7 +12,7 @@ type WaveformBarsProps = {
 const idle = [0.12, 0.24, 0.52, 0.34, 0.72, 0.44, 0.3, 0.6, 0.26, 0.16, 0.46, 0.22, 0.7, 0.36, 0.2, 0.5];
 
 export function WaveformBars({ levels, active = false, color = theme.colors.mint }: WaveformBarsProps) {
-  const pulse = useRef(new Animated.Value(0)).current;
+  const [pulse] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     if (!active) {

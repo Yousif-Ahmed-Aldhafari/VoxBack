@@ -24,10 +24,13 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-view-shot": "5.1.0",
+    "react-native-web": "^0.21.2",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -37,7 +40,11 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.cjs",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:android": "npx eas-cli build --platform android",
+    "build:ios": "npx eas-cli build --platform ios",
+    "build:all": "npx eas-cli build --platform all",
+    "prebuild": "expo prebuild"
   },
   "private": true
 }

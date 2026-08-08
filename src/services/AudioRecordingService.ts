@@ -114,9 +114,11 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     setResult(nextResult);
     setStatus('recorded');
     return nextResult;
-  }, [clearTimers, levels, minDurationMs, result, status, stream]);
+  }, [clearTimers, levels, maxDurationSeconds, minDurationMs, result, status, stream]);
 
-  latestStopRef.current = stop;
+  useEffect(() => {
+    latestStopRef.current = stop;
+  }, [stop]);
 
   const start = useCallback(async () => {
     reset();

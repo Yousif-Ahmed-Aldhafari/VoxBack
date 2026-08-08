@@ -1,5 +1,5 @@
 import { Mic, RefreshCw, Square, Trash2 } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Animated, Linking, StyleSheet, Text, View } from 'react-native';
 
 import { AudioClipControls } from './AudioClipControls';
@@ -27,7 +27,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   const quality = useSettingsStore((state) => state.recordingQuality);
   const recorder = useAudioRecordingService({ quality, maxDurationSeconds });
   const [countdown, setCountdown] = useState<number | 'go' | undefined>();
-  const micScale = useRef(new Animated.Value(1)).current;
+  const [micScale] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     if (!recorder.isRecording) {

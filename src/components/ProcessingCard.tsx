@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from './Card';
@@ -16,14 +16,14 @@ type ProcessingCardProps = {
 export function ProcessingCard({ title, progress = 0.72 }: ProcessingCardProps) {
   const { isRTL } = useTranslation();
   const feedback = useFeedback();
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, useNativeDriver: true }));
     void feedback('reverse');
     loop.start();
     return () => loop.stop();
-  }, [spin]);
+  }, [feedback, spin]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
