@@ -1,10 +1,26 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const Module = require('node:module');
 const ts = require('typescript');
 
 const root = path.resolve(__dirname, '..');
 const tests = [];
+const originalResolve = Module._resolveFilename;
+
+Module._resolveFilename = function resolveAlias(request, parent, isMain, options) {
+  if (request.startsWith('@/')) {
+    const resolved = path.join(root, 'src', request.slice(2));
+    if (fs.existsSync(`${resolved}.ts`)) {
+      return `${resolved}.ts`;
+    }
+    if (fs.existsSync(path.join(resolved, 'index.ts'))) {
+      return path.join(resolved, 'index.ts');
+    }
+    return originalResolve.call(this, resolved, parent, isMain, options);
+  }
+  return originalResolve.call(this, request, parent, isMain, options);
+};
 
 require.extensions['.ts'] = (module, filename) => {
   const source = fs.readFileSync(filename, 'utf8');

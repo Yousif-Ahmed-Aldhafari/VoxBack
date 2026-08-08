@@ -3,6 +3,7 @@ import { requestRecordingPermissionsAsync, useAudioStream } from 'expo-audio';
 
 import { writeBytesToCache } from './AudioFileService';
 import { calculateRms, concatenateInt16, encodeWav } from './WavAudio';
+import { isRecordingDurationValid } from '@/utils/recordingValidation';
 import type { RecordingQuality } from '@/types';
 
 export type RecordingResult = {
@@ -89,7 +90,7 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     stream.stop();
     const duration = Date.now() - startedAtRef.current;
     setDurationMs(duration);
-    if (duration < minDurationMs) {
+    if (!isRecordingDurationValid(duration, minDurationMs, maxDurationSeconds)) {
       const tooShort = new RecordingTooShortError('Recording is too short.');
       setError(tooShort);
       setStatus('error');
