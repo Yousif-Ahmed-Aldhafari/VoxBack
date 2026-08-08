@@ -4,12 +4,14 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { theme } from '@/theme';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 const bars = [12, 28, 44, 26, 58, 38, 24, 50, 32, 16, 46, 30];
 
 export function SplashScreen() {
   const router = useRouter();
   const pulse = useRef(new Animated.Value(0)).current;
+  const tutorialSeen = useSettingsStore((state) => state.tutorialSeen);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -19,12 +21,12 @@ export function SplashScreen() {
       ]),
     );
     loop.start();
-    const timer = setTimeout(() => router.replace('/home'), 1400);
+    const timer = setTimeout(() => router.replace(tutorialSeen ? '/home' : '/tutorial'), 1400);
     return () => {
       loop.stop();
       clearTimeout(timer);
     };
-  }, [pulse, router]);
+  }, [pulse, router, tutorialSeen]);
 
   return (
     <LinearGradient colors={[theme.colors.ink, '#252235']} style={styles.container}>
