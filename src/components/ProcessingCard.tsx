@@ -6,6 +6,7 @@ import { Card } from './Card';
 import { WaveformBars } from './WaveformBars';
 import { useTranslation } from '@/hooks/useTranslation';
 import { theme } from '@/theme';
+import { useFeedback } from '@/services/FeedbackService';
 
 type ProcessingCardProps = {
   title: string;
@@ -14,10 +15,12 @@ type ProcessingCardProps = {
 
 export function ProcessingCard({ title, progress = 0.72 }: ProcessingCardProps) {
   const { isRTL } = useTranslation();
+  const feedback = useFeedback();
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, useNativeDriver: true }));
+    void feedback('reverse');
     loop.start();
     return () => loop.stop();
   }, [spin]);

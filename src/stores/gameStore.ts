@@ -10,7 +10,10 @@ import {
   createGame,
   createPlayer,
   retryCurrentAttempt,
+  getAudioUris,
+  getCurrentRound,
 } from '@/services/GameService';
+import { deleteMany } from '@/services/AudioFileService';
 import type { AudioSimilarityResult, Game, GameSettings, Language, Player } from '@/types';
 
 type GameState = {
@@ -56,13 +59,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     const settings = current?.settings ?? get().draftSettings;
     set({ game: createGame(players, settings, language), draftPlayers: players, draftSettings: settings });
   },
-  newPlayers: () => set({ game: undefined, draftPlayers: initialPlayers, draftSettings: defaultGameSettings }),
-  clearGame: () => set({ game: undefined }),
+  newPlayers: () => {
+    void deleteMany(getAudioUris(get().game));
+    set({ game: undefined, draftPlayers: initialPlayers, draftSettings: defaultGameSettings });
+  },
+  clearGame: () => {
+    void deleteMany(getAudioUris(get().game));
+    set({ game: undefined });
+  },
   setCreatorRecording: (uri) => set((state) => (state.game ? { game: attachCreatorRecording(state.game, uri) } : state)),
   setReversedTarget: (uri) => set((state) => (state.game ? { game: attachReversedTarget(state.game, uri) } : state)),
   setAttemptRecording: (uri) => set((state) => (state.game ? { game: attachAttemptRecording(state.game, uri) } : state)),
   setRoundScore: (reversedAttemptUri, result) =>
     set((state) => (state.game ? { game: applyRoundScore(state.game, reversedAttemptUri, result) } : state)),
-  retryAttempt: () => set((state) => (state.game ? { game: retryCurrentAttempt(state.game) } : state)),
+  retryAttempt: () =>
+    set((state) => {
+      const round = getCurrentRound(state.game);
+      void deleteMany([round?.attemptRecordingUri, round?.reversedAttemptUri]);
+      return state.game ? { game: retryCurrentAttempt(state.game) } : state;
+    }),
   nextRound: () => set((state) => (state.game ? { game: advanceRound(state.game) } : state)),
 }));

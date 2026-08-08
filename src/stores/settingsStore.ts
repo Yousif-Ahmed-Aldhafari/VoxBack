@@ -23,6 +23,7 @@ type SettingsState = {
   recordingQuality: RecordingQuality;
   tutorialSeen: boolean;
   stats: LocalStatistics;
+  recordedGameIds: string[];
   setLanguage: (language: Language) => void;
   setSoundEffects: (enabled: boolean) => void;
   setMusic: (enabled: boolean) => void;
@@ -46,6 +47,7 @@ export const useSettingsStore = create<SettingsState>()(
       recordingQuality: 'standard',
       tutorialSeen: false,
       stats: emptyStats,
+      recordedGameIds: [],
       setLanguage: (language) => {
         applyRTL(language);
         set({ language });
@@ -57,6 +59,10 @@ export const useSettingsStore = create<SettingsState>()(
       completeTutorial: () => set({ tutorialSeen: true }),
       recordCompletedGame: (game) =>
         set((state) => {
+          const gameId = String(game.startedAt);
+          if (state.recordedGameIds.includes(gameId)) {
+            return state;
+          }
           const [first, second] = game.players;
           const highestScore = Math.max(state.stats.highestScore, first.score, second.score);
           const bestSimilarity = Math.max(
@@ -73,6 +79,7 @@ export const useSettingsStore = create<SettingsState>()(
             wins[winner.name] = (wins[winner.name] ?? 0) + 1;
           }
           return {
+            recordedGameIds: [...state.recordedGameIds.slice(-49), gameId],
             stats: {
               gamesPlayed: state.stats.gamesPlayed + 1,
               highestScore,

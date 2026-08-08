@@ -9,6 +9,7 @@ import { WaveformBars } from './WaveformBars';
 import { useTranslation } from '@/hooks/useTranslation';
 import { RecordingPermissionError, RecordingTooShortError, type RecordingResult, useAudioRecordingService } from '@/services/AudioRecordingService';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useFeedback } from '@/services/FeedbackService';
 import { theme } from '@/theme';
 
 type RecordingPanelProps = {
@@ -22,6 +23,7 @@ type RecordingPanelProps = {
 
 export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabel, confirmLabel, onConfirm }: RecordingPanelProps) {
   const { t, isRTL } = useTranslation();
+  const feedback = useFeedback();
   const quality = useSettingsStore((state) => state.recordingQuality);
   const recorder = useAudioRecordingService({ quality, maxDurationSeconds });
   const [countdown, setCountdown] = useState<number | 'go' | undefined>();
@@ -43,15 +45,19 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
 
   async function startWithCountdown() {
     setCountdown(3);
+    void feedback('countdown');
     await wait(420);
     setCountdown(2);
+    void feedback('countdown');
     await wait(420);
     setCountdown(1);
+    void feedback('countdown');
     await wait(420);
     setCountdown('go');
     await wait(260);
     setCountdown(undefined);
     try {
+      void feedback('recordStart');
       await recorder.start();
     } catch (error) {
       handleRecordingError(error);
@@ -61,6 +67,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   async function stop() {
     try {
       await recorder.stop();
+      void feedback('recordStop');
     } catch (error) {
       handleRecordingError(error);
     }

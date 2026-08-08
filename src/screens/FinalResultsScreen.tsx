@@ -13,6 +13,7 @@ import { ScreenShell } from '@/components/ScreenShell';
 import { getAverageSimilarity, getBestRound, getWinner } from '@/services/GameService';
 import { useGameStore } from '@/stores/gameStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useFeedback } from '@/services/FeedbackService';
 import { useTranslation } from '@/hooks/useTranslation';
 import { theme } from '@/theme';
 
@@ -25,12 +26,14 @@ export function FinalResultsScreen() {
   const newPlayers = useGameStore((state) => state.newPlayers);
   const clearGame = useGameStore((state) => state.clearGame);
   const recordCompletedGame = useSettingsStore((state) => state.recordCompletedGame);
+  const feedback = useFeedback();
 
   useEffect(() => {
     if (game) {
       recordCompletedGame(game);
+      void feedback('winner');
     }
-  }, [game, recordCompletedGame]);
+  }, [feedback, game, recordCompletedGame]);
 
   if (!game) {
     return <ScreenShell title={t('noGame')}>{null}</ScreenShell>;

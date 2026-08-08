@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/theme';
+import { useFeedback } from '@/services/FeedbackService';
 
 type ScoreTickerProps = {
   score: number;
@@ -10,6 +11,7 @@ type ScoreTickerProps = {
 export function ScoreTicker({ score }: ScoreTickerProps) {
   const [display, setDisplay] = useState(0);
   const scale = useRef(new Animated.Value(0.88)).current;
+  const feedback = useFeedback();
 
   useEffect(() => {
     let frame = 0;
@@ -22,6 +24,7 @@ export function ScoreTicker({ score }: ScoreTickerProps) {
       }
     }, 26);
     Animated.spring(scale, { toValue: 1, friction: 5, tension: 110, useNativeDriver: true }).start();
+    void feedback(score >= 100 ? 'perfect' : 'score');
     return () => clearInterval(timer);
   }, [scale, score]);
 

@@ -155,3 +155,15 @@ export function getBestRound(game: Game) {
     return best;
   }, undefined);
 }
+
+export function getAudioUris(game?: Game) {
+  if (!game) {
+    return [];
+  }
+  return game.rounds.flatMap((round) => [
+    round.originalRecordingUri,
+    round.reversedTargetUri,
+    round.attemptRecordingUri,
+    round.reversedAttemptUri,
+  ]);
+}

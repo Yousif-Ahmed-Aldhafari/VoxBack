@@ -4,6 +4,7 @@ import type { LucideProps } from 'lucide-react-native';
 
 import { theme } from '@/theme';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useFeedback } from '@/services/FeedbackService';
 
 type ButtonVariant = 'primary' | 'secondary' | 'mint' | 'danger' | 'ghost';
 
@@ -26,12 +27,16 @@ const variantStyles: Record<ButtonVariant, { backgroundColor: string; color: str
 
 export function PartyButton({ title, onPress, icon: Icon, variant = 'primary', disabled = false, compact = false }: PartyButtonProps) {
   const { isRTL } = useTranslation();
+  const feedback = useFeedback();
   const colors = variantStyles[variant];
   return (
     <Pressable
       accessibilityRole="button"
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => {
+        void feedback('tap');
+        onPress?.();
+      }}
       style={({ pressed }) => [
         styles.button,
         compact ? styles.compact : null,
