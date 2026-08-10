@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -15,9 +15,10 @@ type ScreenShellProps = {
   children: ReactNode;
   scroll?: boolean;
   showBack?: boolean;
+  contentStyle?: StyleProp<ViewStyle>;
 };
 
-export function ScreenShell({ title, subtitle, children, scroll = true, showBack = false }: ScreenShellProps) {
+export function ScreenShell({ title, subtitle, children, scroll = true, showBack = false, contentStyle }: ScreenShellProps) {
   const router = useRouter();
   const { isRTL, t } = useTranslation();
   const content = (
@@ -51,7 +52,7 @@ export function ScreenShell({ title, subtitle, children, scroll = true, showBack
             <ScrollView
               alwaysBounceVertical={false}
               bounces={false}
-              contentContainerStyle={styles.scrollContent}
+              contentContainerStyle={[styles.scrollContent, contentStyle]}
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -60,7 +61,7 @@ export function ScreenShell({ title, subtitle, children, scroll = true, showBack
               {content}
             </ScrollView>
           ) : (
-            <View style={styles.staticContent}>{content}</View>
+            <View style={[styles.staticContent, contentStyle]}>{content}</View>
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>

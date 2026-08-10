@@ -78,5 +78,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       void deleteMany([round?.attemptRecordingUri, round?.reversedAttemptUri]);
       return state.game ? { game: retryCurrentAttempt(state.game) } : state;
     }),
-  nextRound: () => set((state) => (state.game ? { game: advanceRound(state.game) } : state)),
+  nextRound: () =>
+    set((state) => {
+      const round = getCurrentRound(state.game);
+      void deleteMany([
+        round?.originalRecordingUri,
+        round?.reversedTargetUri,
+        round?.attemptRecordingUri,
+        round?.reversedAttemptUri,
+      ]);
+      return state.game ? { game: advanceRound(state.game) } : state;
+    }),
 }));

@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { LucideProps } from 'lucide-react-native';
 
 import { theme } from '@/theme';
@@ -15,6 +15,7 @@ type PartyButtonProps = {
   variant?: ButtonVariant;
   disabled?: boolean;
   compact?: boolean;
+  style?: StyleProp<ViewStyle>;
 };
 
 const variantStyles: Record<ButtonVariant, { backgroundColor: string; color: string; borderColor: string }> = {
@@ -25,7 +26,7 @@ const variantStyles: Record<ButtonVariant, { backgroundColor: string; color: str
   ghost: { backgroundColor: 'rgba(255,255,255,0.08)', color: theme.colors.white, borderColor: 'rgba(255,255,255,0.18)' },
 };
 
-export function PartyButton({ title, onPress, icon: Icon, variant = 'primary', disabled = false, compact = false }: PartyButtonProps) {
+export function PartyButton({ title, onPress, icon: Icon, variant = 'primary', disabled = false, compact = false, style }: PartyButtonProps) {
   const { isRTL } = useTranslation();
   const feedback = useFeedback();
   const colors = variantStyles[variant];
@@ -49,6 +50,7 @@ export function PartyButton({ title, onPress, icon: Icon, variant = 'primary', d
           opacity: disabled ? 0.48 : pressed ? 0.82 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
+        style,
       ]}
     >
       {Icon ? (

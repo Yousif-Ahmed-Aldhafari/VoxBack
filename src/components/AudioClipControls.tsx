@@ -12,6 +12,7 @@ type AudioClipControlsProps = {
   label?: string;
   durationMs?: number;
   playLabel?: string;
+  compact?: boolean;
 };
 
 export type AudioClipControlsHandle = {
@@ -19,7 +20,7 @@ export type AudioClipControlsHandle = {
 };
 
 export const AudioClipControls = forwardRef<AudioClipControlsHandle, AudioClipControlsProps>(function AudioClipControls(
-  { uri, label, durationMs, playLabel },
+  { uri, label, durationMs, playLabel, compact = false },
   ref,
 ) {
   const { t, isRTL } = useTranslation();
@@ -39,10 +40,10 @@ export const AudioClipControls = forwardRef<AudioClipControlsHandle, AudioClipCo
   }
 
   return (
-    <View style={styles.wrap}>
-      {label ? <Text style={[styles.label, { textAlign: isRTL ? 'right' : 'left' }]}>{label}</Text> : null}
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+    <View style={[styles.wrap, compact ? styles.compactWrap : null]}>
+      {label ? <Text style={[styles.label, compact ? styles.compactLabel : null, { textAlign: isRTL ? 'right' : 'left' }]}>{label}</Text> : null}
+      <View style={[styles.progressTrack, compact ? styles.compactProgressTrack : null]}>
+        <View style={[styles.progressFill, compact ? styles.compactProgressFill : null, { width: `${Math.round(progress * 100)}%` }]} />
       </View>
       <View style={[styles.timeRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <Text style={styles.timeText}>
@@ -51,8 +52,8 @@ export const AudioClipControls = forwardRef<AudioClipControlsHandle, AudioClipCo
         <Text style={styles.timeText}>{Math.round(progress * 100)}%</Text>
       </View>
       <View style={[styles.row, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Pressable style={styles.iconButton} onPress={() => safe(() => playback.seekBy(-0.75))}>
-          <StepBack color={theme.colors.white} size={20} />
+        <Pressable style={[styles.iconButton, compact ? styles.compactIconButton : null]} onPress={() => safe(() => playback.seekBy(-0.75))}>
+          <StepBack color={theme.colors.white} size={compact ? 17 : 20} />
         </Pressable>
         <PartyButton
           compact
@@ -60,8 +61,8 @@ export const AudioClipControls = forwardRef<AudioClipControlsHandle, AudioClipCo
           icon={playback.isPlaying ? Pause : Play}
           onPress={() => safe(playback.isPlaying ? playback.pause : playback.play)}
         />
-        <Pressable style={styles.iconButton} onPress={() => safe(() => playback.seekBy(0.75))}>
-          <StepForward color={theme.colors.white} size={20} />
+        <Pressable style={[styles.iconButton, compact ? styles.compactIconButton : null]} onPress={() => safe(() => playback.seekBy(0.75))}>
+          <StepForward color={theme.colors.white} size={compact ? 17 : 20} />
         </Pressable>
       </View>
     </View>
@@ -77,6 +78,12 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body,
     fontWeight: '900',
   },
+  compactWrap: {
+    gap: 5,
+  },
+  compactLabel: {
+    fontSize: theme.typography.small,
+  },
   progressTrack: {
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: 4,
@@ -86,6 +93,12 @@ const styles = StyleSheet.create({
   progressFill: {
     backgroundColor: theme.colors.mint,
     height: 8,
+  },
+  compactProgressTrack: {
+    height: 5,
+  },
+  compactProgressFill: {
+    height: 5,
   },
   timeRow: {
     alignItems: 'center',
@@ -111,6 +124,10 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     width: 40,
+  },
+  compactIconButton: {
+    height: 34,
+    width: 34,
   },
 });
 

@@ -6,9 +6,10 @@ import { useFeedback } from '@/services/FeedbackService';
 
 type ScoreTickerProps = {
   score: number;
+  compact?: boolean;
 };
 
-export function ScoreTicker({ score }: ScoreTickerProps) {
+export function ScoreTicker({ score, compact = false }: ScoreTickerProps) {
   const [display, setDisplay] = useState(0);
   const [scale] = useState(() => new Animated.Value(0.88));
   const feedback = useFeedback();
@@ -30,8 +31,8 @@ export function ScoreTicker({ score }: ScoreTickerProps) {
 
   return (
     <Animated.View style={[styles.wrap, { transform: [{ scale }] }]}>
-      <View style={styles.ring}>
-        <Text style={styles.score}>{display}%</Text>
+      <View style={[styles.ring, compact ? styles.compactRing : null]}>
+        <Text style={[styles.score, compact ? styles.compactScore : null]}>{display}%</Text>
       </View>
     </Animated.View>
   );
@@ -59,5 +60,14 @@ const styles = StyleSheet.create({
     fontSize: 54,
     fontWeight: '900',
     letterSpacing: 0,
+  },
+  compactRing: {
+    borderWidth: 4,
+    height: 112,
+    shadowRadius: 16,
+    width: 112,
+  },
+  compactScore: {
+    fontSize: 38,
   },
 });

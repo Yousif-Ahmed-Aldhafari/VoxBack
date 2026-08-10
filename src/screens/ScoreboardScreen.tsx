@@ -1,6 +1,7 @@
 import { ArrowRight, Home } from 'lucide-react-native';
+import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Card } from '@/components/Card';
 import { PartyButton } from '@/components/PartyButton';
@@ -12,24 +13,33 @@ import { theme } from '@/theme';
 
 export function ScoreboardScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ from?: string }>();
   const { t, isRTL } = useTranslation();
   const game = useGameStore((state) => state.game);
   const nextRound = useGameStore((state) => state.nextRound);
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const isAdvancingRef = useRef(false);
   const round = getCurrentRound(game);
 
   if (!game) {
     return <ScreenShell title={t('noGame')}>{null}</ScreenShell>;
   }
 
+  const fromComparison = params.from === 'comparison';
   const finalRoundScored = game.currentRound >= game.totalRounds && round?.similarityScore !== undefined;
 
   function advance() {
+    if (isAdvancingRef.current) {
+      return;
+    }
+    isAdvancingRef.current = true;
+    setIsAdvancing(true);
     nextRound();
     router.replace(finalRoundScored ? '/final-results' : '/round-intro');
   }
 
   return (
-    <ScreenShell title={t('scoreboard')} subtitle={round ? t('roundResults', { round: round.number }) : undefined}>
+    <ScreenShell title={t('scoreboard')} subtitle={round ? t('roundResults', { round: round.number }) : undefined} showBack={fromComparison}>
       <Card tint="warm" style={styles.table}>
         <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <Text style={styles.headerText}>{t('player')}</Text>
@@ -42,7 +52,14 @@ export function ScoreboardScreen() {
           </View>
         ))}
       </Card>
-      <PartyButton title={finalRoundScored ? t('finalResults') : t('nextRound')} icon={ArrowRight} onPress={advance} />
+      {fromComparison ? null : (
+        <PartyButton
+          disabled={isAdvancing}
+          title={finalRoundScored ? t('seeFinalResults') : t('nextRound')}
+          icon={ArrowRight}
+          onPress={advance}
+        />
+      )}
       <PartyButton title={t('home')} icon={Home} variant="ghost" onPress={() => router.replace('/home')} />
     </ScreenShell>
   );

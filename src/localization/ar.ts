@@ -92,6 +92,7 @@ export const ar = {
   player: 'اللاعب',
   score: 'النقاط',
   finalResults: 'النتائج النهائية',
+  seeFinalResults: 'النتائج النهائية',
   winner: 'فاز {{name}}!',
   draw: 'تعادل!',
   points: '{{score}} نقطة',

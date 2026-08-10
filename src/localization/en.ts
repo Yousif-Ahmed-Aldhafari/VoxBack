@@ -92,6 +92,7 @@ export const en = {
   player: 'Player',
   score: 'Score',
   finalResults: 'Final Results',
+  seeFinalResults: 'See Final Results',
   winner: '{{name}} Wins!',
   draw: "It's a Draw!",
   points: '{{score}} points',
