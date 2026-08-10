@@ -55,6 +55,7 @@ export const en = {
   stop: 'Stop',
   cancel: 'Cancel',
   play: 'Play',
+  playRecording: 'Play Recording',
   pause: 'Pause',
   restart: 'Restart',
   recordAgain: 'Record Again',

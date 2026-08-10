@@ -21,7 +21,7 @@ export type RecordingResult = {
   levels: number[];
 };
 
-export type RecordingStatus = 'idle' | 'countdown' | 'recording' | 'recorded' | 'error';
+export type RecordingStatus = 'idle' | 'countdown' | 'recording' | 'stopping' | 'recorded' | 'error';
 
 export class RecordingPermissionError extends Error {
   constructor(message: string) {
@@ -53,10 +53,11 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
   const [error, setError] = useState<Error | undefined>();
   const startedAtRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const levelsRef = useRef<number[]>([]);
   const finishingRef = useRef(false);
-  const latestStopRef = useRef<(() => Promise<RecordingResult | undefined>) | undefined>(undefined);
+  const previousRecordingUriRef = useRef<string | undefined>(undefined);
+  const statusRef = useRef<RecordingStatus>('idle');
+  const stopPromiseRef = useRef<Promise<RecordingResult | undefined> | undefined>(undefined);
 
   const requestedSampleRate = quality === 'high' ? 48000 : 24000;
   const bitRate = quality === 'high' ? 256000 : 128000;
@@ -95,14 +96,14 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     levelsRef.current = levels;
   }, [levels]);
 
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   const clearTimers = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = undefined;
-    }
-    if (stopTimeoutRef.current) {
-      clearTimeout(stopTimeoutRef.current);
-      stopTimeoutRef.current = undefined;
     }
   }, []);
 
@@ -111,55 +112,67 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     setLevels([]);
     setResult(undefined);
     setError(undefined);
+    statusRef.current = 'idle';
     setStatus('idle');
   }, []);
 
   const stop = useCallback(async () => {
+    if (stopPromiseRef.current) {
+      return stopPromiseRef.current;
+    }
     if (finishingRef.current) {
       return result;
     }
-    if (status !== 'recording' && !recorder.isRecording) {
+    if (statusRef.current !== 'recording' && !recorder.isRecording) {
       return result;
     }
-    finishingRef.current = true;
-    clearTimers();
-    try {
-      await recorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
-      const recorderStatus = await waitForRecordingFile(recorder);
-      const duration = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
-      setDurationMs(duration);
-      if (!isRecordingDurationValid(duration, minDurationMs, maxDurationSeconds)) {
-        const tooShort = new RecordingTooShortError('Recording is too short.');
-        setError(tooShort);
-        setStatus('error');
-        throw tooShort;
+    const stopPromise = (async () => {
+      finishingRef.current = true;
+      statusRef.current = 'stopping';
+      setStatus('stopping');
+      clearTimers();
+      try {
+        await recorder.stop();
+        await setAudioModeAsync({ allowsRecording: false });
+        const recorderStatus = await waitForRecordingFile(recorder, previousRecordingUriRef.current);
+        const rawDuration = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
+        const duration = Math.min(rawDuration, maxDurationSeconds * 1000);
+        setDurationMs(duration);
+        if (!isRecordingDurationValid(duration, minDurationMs, maxDurationSeconds)) {
+          const tooShort = new RecordingTooShortError('Recording is too short.');
+          setError(tooShort);
+          statusRef.current = 'error';
+          setStatus('error');
+          throw tooShort;
+        }
+        const uri = getNewRecordingUri(recorder, recorderStatus, previousRecordingUriRef.current);
+        if (!uri) {
+          const recordingError = new Error('Recording failed to produce an audio file.');
+          setError(recordingError);
+          statusRef.current = 'error';
+          setStatus('error');
+          throw recordingError;
+        }
+        const nextResult = {
+          uri,
+          durationMs: duration,
+          sampleRate: requestedSampleRate,
+          channels: 1,
+          levels: levelsRef.current,
+        };
+        setResult(nextResult);
+        setError(undefined);
+        statusRef.current = 'recorded';
+        setStatus('recorded');
+        return nextResult;
+      } finally {
+        finishingRef.current = false;
+        stopPromiseRef.current = undefined;
       }
-      const uri = recorder.uri ?? recorderStatus.url;
-      if (!uri) {
-        const recordingError = new Error('Recording failed to produce an audio file.');
-        setError(recordingError);
-        setStatus('error');
-        throw recordingError;
-      }
-      const nextResult = {
-        uri,
-        durationMs: duration,
-        sampleRate: requestedSampleRate,
-        channels: 1,
-        levels: levelsRef.current,
-      };
-      setResult(nextResult);
-      setStatus('recorded');
-      return nextResult;
-    } finally {
-      finishingRef.current = false;
-    }
-  }, [clearTimers, levels, maxDurationSeconds, minDurationMs, recorder, requestedSampleRate, result, status]);
-
-  useEffect(() => {
-    latestStopRef.current = stop;
-  }, [stop]);
+    })();
+    stopPromiseRef.current = stopPromise;
+    return stopPromise;
+  }, [clearTimers, maxDurationSeconds, minDurationMs, recorder, requestedSampleRate, result]);
 
   const start = useCallback(async () => {
     reset();
@@ -167,17 +180,21 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     if (!permission.granted) {
       const permissionError = new RecordingPermissionError('Microphone permission denied.');
       setError(permissionError);
+      statusRef.current = 'error';
       setStatus('error');
       throw permissionError;
     }
+    previousRecordingUriRef.current = recorder.uri ?? recorder.getStatus().url ?? undefined;
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     await recorder.prepareToRecordAsync(recordingOptions);
+    statusRef.current = 'recording';
     setStatus('recording');
     startedAtRef.current = Date.now();
     recorder.record();
     timerRef.current = setInterval(() => {
       const recorderStatus = recorder.getStatus();
-      const elapsed = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
+      const rawElapsed = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
+      const elapsed = Math.min(rawElapsed, maxDurationSeconds * 1000);
       setDurationMs(elapsed);
       setLevels((current) => {
         const nextLevels = [...current.slice(-23), meteringToLevel(recorderStatus.metering, elapsed)];
@@ -185,13 +202,6 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
         return nextLevels;
       });
     }, 80);
-    stopTimeoutRef.current = setTimeout(() => {
-      void latestStopRef.current?.().catch((error) => {
-        if (!(error instanceof RecordingTooShortError)) {
-          console.warn('Failed to stop recording automatically.', error);
-        }
-      });
-    }, maxDurationSeconds * 1000);
   }, [maxDurationSeconds, recorder, recordingOptions, reset]);
 
   const cancel = useCallback(async () => {
@@ -203,7 +213,17 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     reset();
   }, [clearTimers, recorder, reset]);
 
-  useEffect(() => () => clearTimers(), [clearTimers]);
+  useEffect(
+    () => () => {
+      clearTimers();
+      if (recorder.isRecording) {
+        void recorder.stop().finally(() => {
+          void setAudioModeAsync({ allowsRecording: false });
+        });
+      }
+    },
+    [clearTimers, recorder],
+  );
 
   return {
     status,
@@ -227,13 +247,18 @@ function meteringToLevel(metering: number | undefined, elapsedMs: number) {
   return 0.18 + Math.abs(Math.sin(elapsedMs / 140)) * 0.56;
 }
 
-async function waitForRecordingFile(recorder: AudioRecorder) {
+async function waitForRecordingFile(recorder: AudioRecorder, previousUri?: string) {
   let status: RecorderState = recorder.getStatus();
-  for (let attempt = 0; attempt < 12 && !recorder.uri && !status.url; attempt += 1) {
+  for (let attempt = 0; attempt < 12 && !getNewRecordingUri(recorder, status, previousUri); attempt += 1) {
     await wait(50);
     status = recorder.getStatus();
   }
   return status;
+}
+
+function getNewRecordingUri(recorder: AudioRecorder, status: RecorderState, previousUri?: string) {
+  const uri = recorder.uri ?? status.url ?? undefined;
+  return uri && uri !== previousUri ? uri : undefined;
 }
 
 function wait(ms: number) {

@@ -11,12 +11,15 @@ export function useAudioPlaybackService(uri?: string) {
     }
   }, [player, uri]);
 
-  const play = useCallback(() => {
+  const play = useCallback(async () => {
     if (!uri) {
       return;
     }
+    if (status.didJustFinish || (status.duration > 0 && status.currentTime >= status.duration - 0.05)) {
+      await player.seekTo(0);
+    }
     player.play();
-  }, [player, uri]);
+  }, [player, status.currentTime, status.didJustFinish, status.duration, uri]);
 
   const pause = useCallback(() => {
     player.pause();
@@ -45,7 +48,8 @@ export function useAudioPlaybackService(uri?: string) {
     restart,
     seekBy,
     isPlaying: status.playing,
-    progress: status.duration > 0 ? status.currentTime / status.duration : 0,
+    isFinished: status.didJustFinish,
+    progress: status.duration > 0 ? Math.max(0, Math.min(1, status.currentTime / status.duration)) : 0,
   };
 }
 

@@ -55,6 +55,7 @@ export const ar = {
   stop: 'إيقاف',
   cancel: 'إلغاء',
   play: 'تشغيل',
+  playRecording: 'تشغيل التسجيل',
   pause: 'إيقاف مؤقت',
   restart: 'إعادة',
   recordAgain: 'سجل مرة أخرى',

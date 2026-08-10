@@ -1,12 +1,13 @@
-import { Mic, RefreshCw, Square, Trash2 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { Check, Mic, Square, Trash2 } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Linking, StyleSheet, Text, View } from 'react-native';
 
-import { AudioClipControls } from './AudioClipControls';
+import { AudioClipControls, type AudioClipControlsHandle } from './AudioClipControls';
 import { Card } from './Card';
 import { PartyButton } from './PartyButton';
 import { WaveformBars } from './WaveformBars';
 import { useTranslation } from '@/hooks/useTranslation';
+import { deleteIfExists } from '@/services/AudioFileService';
 import { RecordingPermissionError, RecordingTooShortError, type RecordingResult, useAudioRecordingService } from '@/services/AudioRecordingService';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useFeedback } from '@/services/FeedbackService';
@@ -18,8 +19,10 @@ type RecordingPanelProps = {
   maxDurationSeconds: number;
   playbackLabel: string;
   confirmLabel: string;
-  onConfirm: (result: RecordingResult) => void;
+  onConfirm: (result: RecordingResult) => void | Promise<void>;
 };
+
+type FinalizeReason = 'manual' | 'max-duration';
 
 export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabel, confirmLabel, onConfirm }: RecordingPanelProps) {
   const { t, isRTL } = useTranslation();
@@ -27,7 +30,11 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   const quality = useSettingsStore((state) => state.recordingQuality);
   const recorder = useAudioRecordingService({ quality, maxDurationSeconds });
   const [countdown, setCountdown] = useState<number | 'go' | undefined>();
+  const [isStopping, setIsStopping] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const [micScale] = useState(() => new Animated.Value(1));
+  const playbackRef = useRef<AudioClipControlsHandle>(null);
+  const isStoppingRef = useRef(false);
 
   useEffect(() => {
     if (!recorder.isRecording) {
@@ -44,6 +51,9 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   }, [micScale, recorder.isRecording]);
 
   async function startWithCountdown() {
+    if (countdown !== undefined || recorder.status === 'recording' || recorder.status === 'stopping') {
+      return;
+    }
     setCountdown(3);
     void feedback('countdown');
     await wait(420);
@@ -64,37 +74,108 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
     }
   }
 
-  async function stop() {
+  const handleRecordingError = useCallback(
+    (error: unknown) => {
+      if (error instanceof RecordingPermissionError) {
+        Alert.alert(t('microphoneDenied'), undefined, [
+          { text: t('cancel') },
+          { text: t('openSettings'), onPress: () => Linking.openSettings() },
+        ]);
+        return;
+      }
+      if (error instanceof RecordingTooShortError) {
+        Alert.alert(t('minimumRecording'));
+        return;
+      }
+      Alert.alert(t('recordingFailed'));
+    },
+    [t],
+  );
+
+  const finalizeRecording = useCallback(
+    async (reason: FinalizeReason) => {
+      if (isStoppingRef.current || recorder.status !== 'recording') {
+        return;
+      }
+      isStoppingRef.current = true;
+      setIsStopping(true);
+      try {
+        const result = await recorder.stop();
+        if (!result?.uri) {
+          throw new Error('Recording URI was not returned.');
+        }
+        void feedback('recordStop');
+      } catch (error) {
+        handleRecordingError(error);
+        recorder.reset();
+      } finally {
+        isStoppingRef.current = false;
+        setIsStopping(false);
+      }
+    },
+    [feedback, handleRecordingError, recorder],
+  );
+
+  useEffect(() => {
+    if (recorder.status !== 'recording') {
+      return;
+    }
+    if (recorder.durationMs >= maxDurationSeconds * 1000) {
+      void finalizeRecording('max-duration');
+    }
+  }, [finalizeRecording, maxDurationSeconds, recorder.durationMs, recorder.status]);
+
+  async function recordAgain() {
+    const uri = recorder.result?.uri;
     try {
-      await recorder.stop();
-      void feedback('recordStop');
+      playbackRef.current?.pause();
+      await deleteIfExists(uri);
+    } finally {
+      setIsConfirming(false);
+      recorder.reset();
+    }
+  }
+
+  async function useRecording() {
+    if (!recorder.result || isConfirming) {
+      return;
+    }
+    try {
+      playbackRef.current?.pause();
+      setIsConfirming(true);
+      await onConfirm(recorder.result);
     } catch (error) {
+      setIsConfirming(false);
       handleRecordingError(error);
     }
   }
 
-  function handleRecordingError(error: unknown) {
-    if (error instanceof RecordingPermissionError) {
-      Alert.alert(t('microphoneDenied'), undefined, [
-        { text: t('cancel') },
-        { text: t('openSettings'), onPress: () => Linking.openSettings() },
-      ]);
-      return;
-    }
-    if (error instanceof RecordingTooShortError) {
-      Alert.alert(t('minimumRecording'));
-      return;
-    }
-    Alert.alert(t('recordingFailed'));
-  }
-
   const seconds = Math.min(maxDurationSeconds, recorder.durationMs / 1000);
   const progress = Math.min(1, seconds / maxDurationSeconds);
+  const isCountdown = countdown !== undefined;
+  const isRecording = recorder.status === 'recording';
+  const isFinalizing = isStopping || recorder.status === 'stopping';
+  const showActiveRecording = isRecording || isFinalizing;
+
+  if (recorder.status === 'recorded' && recorder.result) {
+    return (
+      <Card tint="dark" style={styles.card}>
+        <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{playbackLabel}</Text>
+        <WaveformBars levels={recorder.result.levels} active={false} color={theme.colors.mint} />
+        <Text style={styles.recordedDuration}>{formatDurationMs(recorder.result.durationMs)}</Text>
+        <AudioClipControls ref={playbackRef} durationMs={recorder.result.durationMs} playLabel={t('playRecording')} uri={recorder.result.uri} />
+        <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <PartyButton compact disabled={isConfirming} title={t('recordAgain')} icon={Mic} variant="secondary" onPress={recordAgain} />
+          <PartyButton compact disabled={isConfirming} title={confirmLabel} icon={Check} variant="mint" onPress={useRecording} />
+        </View>
+      </Card>
+    );
+  }
 
   return (
     <Card tint="dark" style={styles.card}>
-      <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
-      <Text style={[styles.prompt, { textAlign: isRTL ? 'right' : 'left' }]}>{prompt}</Text>
+      <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{showActiveRecording ? t('recording') : title}</Text>
+      {showActiveRecording ? null : <Text style={[styles.prompt, { textAlign: isRTL ? 'right' : 'left' }]}>{prompt}</Text>}
 
       <View style={styles.micStage}>
         <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
@@ -103,7 +184,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
         {countdown !== undefined ? <Text style={styles.countdown}>{countdown === 'go' ? t('recordNow') : countdown}</Text> : null}
       </View>
 
-      <WaveformBars levels={recorder.levels} active={recorder.isRecording} color={recorder.isRecording ? theme.colors.coral : theme.colors.mint} />
+      <WaveformBars levels={recorder.levels} active={isRecording && !isFinalizing} color={isRecording && !isFinalizing ? theme.colors.coral : theme.colors.mint} />
 
       <View style={styles.timerWrap}>
         <Text style={styles.timer}>{seconds.toFixed(1)}s</Text>
@@ -113,32 +194,32 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
         </View>
       </View>
 
-      {recorder.status === 'recorded' && recorder.result ? (
-        <View style={styles.afterRecord}>
-          <AudioClipControls uri={recorder.result.uri} label={playbackLabel} />
-          <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <PartyButton compact title={t('recordAgain')} icon={RefreshCw} variant="secondary" onPress={recorder.reset} />
-            <PartyButton compact title={confirmLabel} icon={Mic} variant="mint" onPress={() => onConfirm(recorder.result!)} />
-          </View>
-        </View>
-      ) : (
-        <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          {recorder.isRecording ? (
-            <>
-              <PartyButton compact title={t('stop')} icon={Square} onPress={stop} />
-              <PartyButton compact title={t('cancel')} icon={Trash2} variant="ghost" onPress={recorder.cancel} />
-            </>
-          ) : (
-            <PartyButton title={t('tapToRecord')} icon={Mic} onPress={startWithCountdown} />
-          )}
-        </View>
-      )}
+      <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        {showActiveRecording ? (
+          <>
+            <PartyButton compact disabled={isFinalizing} title={t('stop')} icon={Square} onPress={() => finalizeRecording('manual')} />
+            <PartyButton compact disabled={isFinalizing} title={t('cancel')} icon={Trash2} variant="ghost" onPress={recorder.cancel} />
+          </>
+        ) : isCountdown ? (
+          <PartyButton disabled title={countdown === 'go' ? t('recordNow') : t('getReady')} icon={Mic} />
+        ) : (
+          <PartyButton title={t('tapToRecord')} icon={Mic} onPress={startWithCountdown} />
+        )}
+      </View>
     </Card>
   );
 }
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDurationMs(durationMs: number) {
+  const totalTenths = Math.max(0, Math.round(durationMs / 100));
+  const minutes = Math.floor(totalTenths / 600);
+  const seconds = Math.floor((totalTenths % 600) / 10);
+  const tenths = totalTenths % 10;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${tenths}`;
 }
 
 const styles = StyleSheet.create({
@@ -189,6 +270,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
   },
+  recordedDuration: {
+    color: theme.colors.mint,
+    fontSize: theme.typography.h1,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
   max: {
     color: 'rgba(255,255,255,0.68)',
     fontSize: theme.typography.small,
@@ -204,9 +291,6 @@ const styles = StyleSheet.create({
   progressFill: {
     backgroundColor: theme.colors.coral,
     height: 8,
-  },
-  afterRecord: {
-    gap: theme.spacing.md,
   },
   actions: {
     alignItems: 'center',
