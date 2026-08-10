@@ -10,7 +10,7 @@ type ButtonVariant = 'primary' | 'secondary' | 'mint' | 'danger' | 'ghost';
 
 type PartyButtonProps = {
   title: string;
-  onPress?: () => void;
+  onPress?: () => void | Promise<void>;
   icon?: ComponentType<LucideProps>;
   variant?: ButtonVariant;
   disabled?: boolean;
@@ -35,7 +35,9 @@ export function PartyButton({ title, onPress, icon: Icon, variant = 'primary', d
       disabled={disabled}
       onPress={() => {
         void feedback('tap');
-        onPress?.();
+        void Promise.resolve(onPress?.()).catch((error) => {
+          console.warn('Button action failed.', error);
+        });
       }}
       style={({ pressed }) => [
         styles.button,

@@ -21,8 +21,21 @@ export type RecordingResult = {
 
 export type RecordingStatus = 'idle' | 'countdown' | 'recording' | 'recorded' | 'error';
 
-export class RecordingPermissionError extends Error {}
-export class RecordingTooShortError extends Error {}
+export class RecordingPermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecordingPermissionError';
+    Object.setPrototypeOf(this, RecordingPermissionError.prototype);
+  }
+}
+
+export class RecordingTooShortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecordingTooShortError';
+    Object.setPrototypeOf(this, RecordingTooShortError.prototype);
+  }
+}
 
 type UseAudioRecordingServiceOptions = {
   quality: RecordingQuality;
@@ -153,7 +166,11 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
       setLevels((current) => [...current.slice(-23), meteringToLevel(recorderStatus.metering, elapsed)]);
     }, 80);
     stopTimeoutRef.current = setTimeout(() => {
-      void latestStopRef.current?.();
+      void latestStopRef.current?.().catch((error) => {
+        if (!(error instanceof RecordingTooShortError)) {
+          console.warn('Failed to stop recording automatically.', error);
+        }
+      });
     }, maxDurationSeconds * 1000);
   }, [maxDurationSeconds, recorder, recordingOptions, reset]);
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -46,13 +46,23 @@ export function ScreenShell({ title, subtitle, children, scroll = true, showBack
   return (
     <LinearGradient colors={[theme.colors.ink, '#201f2e', '#141422']} style={styles.gradient}>
       <SafeAreaView style={styles.safe}>
-        {scroll ? (
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {content}
-          </ScrollView>
-        ) : (
-          <View style={styles.staticContent}>{content}</View>
-        )}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboard}>
+          {scroll ? (
+            <ScrollView
+              alwaysBounceVertical={false}
+              bounces={false}
+              contentContainerStyle={styles.scrollContent}
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={styles.scroll}
+            >
+              {content}
+            </ScrollView>
+          ) : (
+            <View style={styles.staticContent}>{content}</View>
+          )}
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -63,6 +73,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safe: {
+    flex: 1,
+  },
+  keyboard: {
+    flex: 1,
+  },
+  scroll: {
     flex: 1,
   },
   scrollContent: {
