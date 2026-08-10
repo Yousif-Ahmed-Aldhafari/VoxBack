@@ -22,13 +22,12 @@ type RecordingPanelProps = {
   onConfirm: (result: RecordingResult) => void | Promise<void>;
 };
 
-type CountdownValue = 3 | 2 | 1 | 'go';
+type CountdownValue = 3 | 2 | 1;
 type FinalizeReason = 'manual' | 'max-duration';
 type PanelRecordingState = 'idle' | 'countdown' | 'recording' | 'stopping' | 'recorded' | 'error';
 
 const COUNTDOWN_STEPS: CountdownValue[] = [3, 2, 1];
 const COUNTDOWN_STEP_MS = 1000;
-const COUNTDOWN_RECORD_MS = 380;
 const COUNTDOWN_ANIMATION_MS = 260;
 const COUNTDOWN_WAVEFORM_OPACITY = 0.2;
 
@@ -99,11 +98,6 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
         void feedback('countdown');
         await wait(COUNTDOWN_STEP_MS);
       }
-      if (!isCountdownRunActive(runId)) {
-        return;
-      }
-      setCountdown('go');
-      await wait(COUNTDOWN_RECORD_MS);
       if (!isCountdownRunActive(runId)) {
         return;
       }
@@ -212,7 +206,6 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   const isRecording = recordingState === 'recording';
   const isFinalizing = recordingState === 'stopping';
   const showActiveRecording = isRecording || isFinalizing;
-  const countdownText = countdown === 'go' ? t('recordNow').toUpperCase() : countdown;
   const countdownScale = countdownAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.88, 1],
@@ -242,17 +235,15 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
       <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{showActiveRecording ? t('recording') : title}</Text>
       {showActiveRecording ? null : <Text style={[styles.prompt, { textAlign: isRTL ? 'right' : 'left' }]}>{prompt}</Text>}
 
-      {isCountdown ? null : (
-        <View style={styles.micStage}>
-          <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
-            <Mic color={theme.colors.ink} size={58} strokeWidth={2.5} />
-          </Animated.View>
-        </View>
-      )}
+      <View style={styles.micStage}>
+        <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
+          <Mic color={theme.colors.ink} size={58} strokeWidth={2.5} />
+        </Animated.View>
+      </View>
 
       <View style={styles.waveformStage}>
         <Animated.View style={[styles.waveformLayer, { opacity: isCountdown ? COUNTDOWN_WAVEFORM_OPACITY : 1 }]}>
-          <WaveformBars levels={isCountdown ? undefined : recorder.levels} active={isRecording && !isFinalizing} color={isRecording && !isFinalizing ? theme.colors.coral : theme.colors.mint} />
+          <WaveformBars levels={recorder.levels} active={isRecording && !isFinalizing} color={isRecording && !isFinalizing ? theme.colors.coral : theme.colors.mint} />
         </Animated.View>
         {isCountdown ? (
           <Animated.Text
@@ -264,7 +255,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
               },
             ]}
           >
-            {countdownText}
+            {countdown}
           </Animated.Text>
         ) : null}
       </View>
@@ -283,8 +274,6 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
             <PartyButton compact disabled={isFinalizing} title={t('stop')} icon={Square} onPress={() => finalizeRecording('manual')} />
             <PartyButton compact disabled={isFinalizing} title={t('cancel')} icon={Trash2} variant="ghost" onPress={recorder.cancel} />
           </>
-        ) : isCountdown ? (
-          <PartyButton disabled title={countdown === 'go' ? t('recordNow') : t('getReady')} icon={Mic} />
         ) : (
           <PartyButton title={t('tapToRecord')} icon={Mic} onPress={startWithCountdown} />
         )}
