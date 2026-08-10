@@ -27,7 +27,12 @@ export function RoundIntroScreen() {
   const { creator, guesser } = getRoundPlayers(game, round);
 
   return (
-    <ScreenShell title={t('roundTitle', { round: round.number })} subtitle={t('creatorTurn', { name: creator.name })} showBack>
+    <ScreenShell
+      title={t('roundTitle', { round: round.number })}
+      subtitle={t('creatorTurn', { name: creator.name })}
+      showBack
+      backFallbackHref="/game-settings"
+    >
       <Card tint="warm" style={styles.card}>
         <Text style={[styles.avatar, { textAlign: isRTL ? 'right' : 'left' }]}>{creator.avatar}</Text>
         <Text style={[styles.prompt, { textAlign: isRTL ? 'right' : 'left' }]}>{t('creatorPrompt', { name: guesser.name })}</Text>

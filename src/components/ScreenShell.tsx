@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 import { PartyButton } from './PartyButton';
@@ -17,6 +17,7 @@ type ScreenShellProps = {
   scrollEnabled?: boolean;
   bounces?: boolean;
   showBack?: boolean;
+  backFallbackHref?: Href;
   contentStyle?: StyleProp<ViewStyle>;
 };
 
@@ -28,10 +29,21 @@ export function ScreenShell({
   scrollEnabled = true,
   bounces = false,
   showBack = false,
+  backFallbackHref,
   contentStyle,
 }: ScreenShellProps) {
   const router = useRouter();
   const { isRTL, t } = useTranslation();
+  function goBack() {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (backFallbackHref) {
+      router.replace(backFallbackHref);
+    }
+  }
+
   const content = (
     <>
       {showBack ? (
@@ -41,7 +53,7 @@ export function ScreenShell({
             icon={isRTL ? ChevronRight : ChevronLeft}
             variant="ghost"
             compact
-            onPress={() => router.back()}
+            onPress={goBack}
           />
         </View>
       ) : null}

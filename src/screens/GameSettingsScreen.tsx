@@ -18,7 +18,7 @@ export function GameSettingsScreen() {
 
   function start() {
     startGame(language);
-    router.replace('/round-intro');
+    router.push('/round-intro');
   }
 
   return (
