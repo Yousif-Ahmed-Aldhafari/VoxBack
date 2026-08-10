@@ -18,6 +18,7 @@ type ScreenShellProps = {
   bounces?: boolean;
   showBack?: boolean;
   backFallbackHref?: Href;
+  onBack?: () => void | Promise<void>;
   contentStyle?: StyleProp<ViewStyle>;
 };
 
@@ -30,11 +31,18 @@ export function ScreenShell({
   bounces = false,
   showBack = false,
   backFallbackHref,
+  onBack,
   contentStyle,
 }: ScreenShellProps) {
   const router = useRouter();
   const { isRTL, t } = useTranslation();
   function goBack() {
+    if (onBack) {
+      void Promise.resolve(onBack()).catch((error) => {
+        console.warn('Back action failed.', error);
+      });
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
       return;

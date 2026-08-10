@@ -1,5 +1,5 @@
 import { Check, Mic, Square, Trash2 } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Alert, Animated, Linking, StyleSheet, Text, View } from 'react-native';
 
 import { AudioClipControls, type AudioClipControlsHandle } from './AudioClipControls';
@@ -22,6 +22,10 @@ type RecordingPanelProps = {
   onConfirm: (result: RecordingResult) => void | Promise<void>;
 };
 
+export type RecordingPanelHandle = {
+  prepareToLeave: () => Promise<void>;
+};
+
 type CountdownValue = 3 | 2 | 1;
 type FinalizeReason = 'manual' | 'max-duration';
 type PanelRecordingState = 'idle' | 'countdown' | 'recording' | 'stopping' | 'recorded' | 'error';
@@ -31,7 +35,10 @@ const COUNTDOWN_STEP_MS = 1000;
 const COUNTDOWN_ANIMATION_MS = 260;
 const COUNTDOWN_WAVEFORM_OPACITY = 0.2;
 
-export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabel, confirmLabel, onConfirm }: RecordingPanelProps) {
+export const RecordingPanel = forwardRef<RecordingPanelHandle, RecordingPanelProps>(function RecordingPanel(
+  { title, prompt, maxDurationSeconds, playbackLabel, confirmLabel, onConfirm },
+  ref,
+) {
   const { t, isRTL } = useTranslation();
   const feedback = useFeedback();
   const quality = useSettingsStore((state) => state.recordingQuality);
@@ -46,6 +53,8 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   const countdownRunRef = useRef(0);
   const isCountdownRunningRef = useRef(false);
   const isMountedRef = useRef(true);
+  const isLeavingRef = useRef(false);
+  const startPromiseRef = useRef<Promise<void> | undefined>(undefined);
 
   useEffect(() => {
     if (!recorder.isRecording) {
@@ -83,7 +92,13 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   }, [countdown, countdownAnim]);
 
   async function startWithCountdown() {
-    if (isCountdownRunningRef.current || recorder.status === 'recording' || recorder.status === 'stopping' || recorder.status === 'recorded') {
+    if (
+      isLeavingRef.current ||
+      isCountdownRunningRef.current ||
+      recorder.status === 'recording' ||
+      recorder.status === 'stopping' ||
+      recorder.status === 'recorded'
+    ) {
       return;
     }
     const runId = countdownRunRef.current + 1;
@@ -102,7 +117,16 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
         return;
       }
       setCountdown(undefined);
-      await recorder.start();
+      const startPromise = recorder.start();
+      startPromiseRef.current = startPromise;
+      await startPromise;
+      if (startPromiseRef.current === startPromise) {
+        startPromiseRef.current = undefined;
+      }
+      if (!isCountdownRunActive(runId)) {
+        await recorder.cancel();
+        return;
+      }
       if (isCountdownRunActive(runId)) {
         void feedback('recordStart');
       }
@@ -119,7 +143,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
   }
 
   function isCountdownRunActive(runId: number) {
-    return isMountedRef.current && countdownRunRef.current === runId;
+    return isMountedRef.current && !isLeavingRef.current && countdownRunRef.current === runId;
   }
 
   const handleRecordingError = useCallback(
@@ -142,27 +166,57 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
 
   const finalizeRecording = useCallback(
     async (reason: FinalizeReason) => {
-      if (isStoppingRef.current || recorder.status !== 'recording') {
+      if (isLeavingRef.current || isStoppingRef.current || recorder.status !== 'recording') {
         return;
       }
       isStoppingRef.current = true;
       setIsStopping(true);
       try {
         const result = await recorder.stop(reason === 'max-duration' ? maxDurationSeconds * 1000 : undefined);
+        if (isLeavingRef.current) {
+          return;
+        }
         if (!result?.uri) {
           throw new Error('Recording URI was not returned.');
         }
         void feedback('recordStop');
       } catch (error) {
+        if (isLeavingRef.current) {
+          return;
+        }
         handleRecordingError(error);
         recorder.reset();
       } finally {
         isStoppingRef.current = false;
-        setIsStopping(false);
+        if (isMountedRef.current && !isLeavingRef.current) {
+          setIsStopping(false);
+        }
       }
     },
     [feedback, handleRecordingError, maxDurationSeconds, recorder],
   );
+
+  const prepareToLeave = useCallback(async () => {
+    if (isLeavingRef.current) {
+      return;
+    }
+    isLeavingRef.current = true;
+    countdownRunRef.current += 1;
+    isCountdownRunningRef.current = false;
+    countdownAnim.stopAnimation();
+    playbackRef.current?.pause();
+    if (isMountedRef.current) {
+      setCountdown(undefined);
+      setIsStopping(false);
+      setIsConfirming(false);
+    }
+    await startPromiseRef.current?.catch(() => undefined);
+    startPromiseRef.current = undefined;
+    await recorder.cancel().catch(() => undefined);
+    await deleteIfExists(recorder.result?.uri).catch(() => undefined);
+  }, [countdownAnim, recorder]);
+
+  useImperativeHandle(ref, () => ({ prepareToLeave }), [prepareToLeave]);
 
   useEffect(() => {
     if (recorder.status !== 'recording') {
@@ -280,7 +334,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
       </View>
     </Card>
   );
-}
+});
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -58,6 +58,8 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
   const previousRecordingUriRef = useRef<string | undefined>(undefined);
   const statusRef = useRef<RecordingStatus>('idle');
   const stopPromiseRef = useRef<Promise<RecordingResult | undefined> | undefined>(undefined);
+  const mountedRef = useRef(true);
+  const cancelingRef = useRef(false);
 
   const requestedSampleRate = quality === 'high' ? 48000 : 24000;
   const bitRate = quality === 'high' ? 256000 : 128000;
@@ -108,11 +110,14 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
   }, []);
 
   const reset = useCallback(() => {
+    statusRef.current = 'idle';
+    if (!mountedRef.current) {
+      return;
+    }
     setDurationMs(0);
     setLevels([]);
     setResult(undefined);
     setError(undefined);
-    statusRef.current = 'idle';
     setStatus('idle');
   }, []);
 
@@ -129,28 +134,42 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     const stopPromise = (async () => {
       finishingRef.current = true;
       statusRef.current = 'stopping';
-      setStatus('stopping');
+      if (mountedRef.current) {
+        setStatus('stopping');
+      }
       clearTimers();
       try {
         await recorder.stop();
         await setAudioModeAsync({ allowsRecording: false });
+        if (cancelingRef.current || !mountedRef.current) {
+          return undefined;
+        }
         const recorderStatus = await waitForRecordingFile(recorder, previousRecordingUriRef.current);
+        if (cancelingRef.current || !mountedRef.current) {
+          return undefined;
+        }
         const rawDuration = finalDurationMs ?? (recorderStatus.durationMillis || Date.now() - startedAtRef.current);
         const duration = Math.min(rawDuration, maxDurationSeconds * 1000);
-        setDurationMs(duration);
+        if (mountedRef.current) {
+          setDurationMs(duration);
+        }
         if (!isRecordingDurationValid(duration, minDurationMs, maxDurationSeconds)) {
           const tooShort = new RecordingTooShortError('Recording is too short.');
-          setError(tooShort);
           statusRef.current = 'error';
-          setStatus('error');
+          if (mountedRef.current) {
+            setError(tooShort);
+            setStatus('error');
+          }
           throw tooShort;
         }
         const uri = getNewRecordingUri(recorder, recorderStatus, previousRecordingUriRef.current);
         if (!uri) {
           const recordingError = new Error('Recording failed to produce an audio file.');
-          setError(recordingError);
           statusRef.current = 'error';
-          setStatus('error');
+          if (mountedRef.current) {
+            setError(recordingError);
+            setStatus('error');
+          }
           throw recordingError;
         }
         const nextResult = {
@@ -160,10 +179,12 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
           channels: 1,
           levels: levelsRef.current,
         };
-        setResult(nextResult);
-        setError(undefined);
         statusRef.current = 'recorded';
-        setStatus('recorded');
+        if (mountedRef.current) {
+          setResult(nextResult);
+          setError(undefined);
+          setStatus('recorded');
+        }
         return nextResult;
       } finally {
         finishingRef.current = false;
@@ -175,23 +196,46 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
   }, [clearTimers, maxDurationSeconds, minDurationMs, recorder, requestedSampleRate, result]);
 
   const start = useCallback(async () => {
+    if (!mountedRef.current) {
+      return;
+    }
+    cancelingRef.current = false;
     reset();
     const permission = await requestRecordingPermissionsAsync();
+    if (!mountedRef.current) {
+      return;
+    }
     if (!permission.granted) {
       const permissionError = new RecordingPermissionError('Microphone permission denied.');
-      setError(permissionError);
       statusRef.current = 'error';
-      setStatus('error');
+      if (mountedRef.current) {
+        setError(permissionError);
+        setStatus('error');
+      }
       throw permissionError;
     }
     previousRecordingUriRef.current = recorder.uri ?? recorder.getStatus().url ?? undefined;
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    if (!mountedRef.current) {
+      await setAudioModeAsync({ allowsRecording: false });
+      return;
+    }
     await recorder.prepareToRecordAsync(recordingOptions);
+    if (!mountedRef.current) {
+      await setAudioModeAsync({ allowsRecording: false });
+      return;
+    }
     statusRef.current = 'recording';
-    setStatus('recording');
+    if (mountedRef.current) {
+      setStatus('recording');
+    }
     startedAtRef.current = Date.now();
     recorder.record();
     timerRef.current = setInterval(() => {
+      if (!mountedRef.current) {
+        clearTimers();
+        return;
+      }
       const recorderStatus = recorder.getStatus();
       const rawElapsed = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
       const elapsed = Math.min(rawElapsed, maxDurationSeconds * 1000);
@@ -202,19 +246,28 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
         return nextLevels;
       });
     }, 80);
-  }, [maxDurationSeconds, recorder, recordingOptions, reset]);
+  }, [clearTimers, maxDurationSeconds, recorder, recordingOptions, reset]);
 
   const cancel = useCallback(async () => {
+    cancelingRef.current = true;
     clearTimers();
-    if (recorder.isRecording) {
-      await recorder.stop();
+    try {
+      if (stopPromiseRef.current) {
+        await stopPromiseRef.current.catch(() => undefined);
+      } else if (recorder.isRecording) {
+        await recorder.stop().catch(() => undefined);
+      }
+    } finally {
       await setAudioModeAsync({ allowsRecording: false });
+      reset();
+      cancelingRef.current = false;
     }
-    reset();
   }, [clearTimers, recorder, reset]);
 
   useEffect(
     () => () => {
+      mountedRef.current = false;
+      cancelingRef.current = true;
       clearTimers();
       if (recorder.isRecording) {
         void recorder.stop().finally(() => {
