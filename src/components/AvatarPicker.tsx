@@ -8,14 +8,16 @@ type AvatarPickerProps = {
   label: string;
   value?: string;
   onChange: (avatar: string) => void;
+  compact?: boolean;
+  dense?: boolean;
 };
 
-export function AvatarPicker({ label, value, onChange }: AvatarPickerProps) {
+export function AvatarPicker({ label, value, onChange, compact = false, dense = false }: AvatarPickerProps) {
   const { isRTL } = useTranslation();
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, compact ? styles.compactWrap : null, dense ? styles.denseWrap : null]}>
       <Text style={[styles.label, { textAlign: isRTL ? 'right' : 'left' }]}>{label}</Text>
-      <View style={[styles.grid, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+      <View style={[styles.grid, compact ? styles.compactGrid : null, dense ? styles.denseGrid : null, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         {avatarChoices.map((avatar) => {
           const selected = value === avatar;
           return (
@@ -23,9 +25,15 @@ export function AvatarPicker({ label, value, onChange }: AvatarPickerProps) {
               accessibilityRole="button"
               key={avatar}
               onPress={() => onChange(avatar)}
-              style={({ pressed }) => [styles.avatar, selected ? styles.selected : null, { opacity: pressed ? 0.75 : 1 }]}
+              style={({ pressed }) => [
+                styles.avatar,
+                compact ? styles.compactAvatar : null,
+                dense ? styles.denseAvatar : null,
+                selected ? styles.selected : null,
+                { opacity: pressed ? 0.75 : 1 },
+              ]}
             >
-              <Text style={styles.emoji}>{avatar}</Text>
+              <Text style={[styles.emoji, compact ? styles.compactEmoji : null, dense ? styles.denseEmoji : null]}>{avatar}</Text>
             </Pressable>
           );
         })}
@@ -38,6 +46,12 @@ const styles = StyleSheet.create({
   wrap: {
     gap: theme.spacing.sm,
   },
+  compactWrap: {
+    gap: theme.spacing.xs,
+  },
+  denseWrap: {
+    gap: 2,
+  },
   label: {
     color: theme.colors.textMuted,
     fontSize: theme.typography.small,
@@ -46,6 +60,12 @@ const styles = StyleSheet.create({
   grid: {
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
+  },
+  compactGrid: {
+    gap: theme.spacing.xs,
+  },
+  denseGrid: {
+    gap: 2,
   },
   avatar: {
     alignItems: 'center',
@@ -57,11 +77,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
   },
+  compactAvatar: {
+    height: 32,
+    width: 32,
+  },
+  denseAvatar: {
+    height: 30,
+    width: 30,
+  },
   selected: {
     backgroundColor: theme.colors.lemon,
     borderColor: theme.colors.ink,
   },
   emoji: {
     fontSize: 24,
+  },
+  compactEmoji: {
+    fontSize: 19,
+  },
+  denseEmoji: {
+    fontSize: 18,
   },
 });
