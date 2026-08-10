@@ -23,10 +23,12 @@ export function PlayerNameCard({ title, name, avatar, onNameChange, onAvatarChan
       </View>
       <Text style={[styles.label, { textAlign: isRTL ? 'right' : 'left' }]}>{t('playerName')}</Text>
       <TextInput
+        blurOnSubmit
         value={name}
         onChangeText={onNameChange}
         placeholder={title}
         placeholderTextColor={theme.colors.textMuted}
+        returnKeyType="done"
         style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
       />
       <AvatarPicker label={t('avatar')} value={avatar} onChange={onAvatarChange} />

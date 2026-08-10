@@ -14,11 +14,22 @@ type ScreenShellProps = {
   subtitle?: string;
   children: ReactNode;
   scroll?: boolean;
+  scrollEnabled?: boolean;
+  bounces?: boolean;
   showBack?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
 };
 
-export function ScreenShell({ title, subtitle, children, scroll = true, showBack = false, contentStyle }: ScreenShellProps) {
+export function ScreenShell({
+  title,
+  subtitle,
+  children,
+  scroll = true,
+  scrollEnabled = true,
+  bounces = false,
+  showBack = false,
+  contentStyle,
+}: ScreenShellProps) {
   const router = useRouter();
   const { isRTL, t } = useTranslation();
   const content = (
@@ -51,10 +62,11 @@ export function ScreenShell({ title, subtitle, children, scroll = true, showBack
           {scroll ? (
             <ScrollView
               alwaysBounceVertical={false}
-              bounces={false}
+              bounces={bounces}
               contentContainerStyle={[styles.scrollContent, contentStyle]}
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               keyboardShouldPersistTaps="handled"
+              scrollEnabled={scrollEnabled}
               showsVerticalScrollIndicator={false}
               style={styles.scroll}
             >
