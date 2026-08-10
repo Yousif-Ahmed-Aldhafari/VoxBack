@@ -1,6 +1,4 @@
 import { ArrowRight } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { Keyboard, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { PartyButton } from '@/components/PartyButton';
@@ -14,29 +12,9 @@ export function PlayerSetupScreen() {
   const { t } = useTranslation();
   const players = useGameStore((state) => state.draftPlayers);
   const setDraftPlayer = useGameStore((state) => state.setDraftPlayer);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
 
   return (
-    <ScreenShell
-      title={t('playerSetupTitle')}
-      subtitle={t('playerSetupSubtitle')}
-      showBack
-      scroll
-      scrollEnabled={keyboardVisible}
-      bounces={keyboardVisible}
-    >
+    <ScreenShell title={t('playerSetupTitle')} subtitle={t('playerSetupSubtitle')} showBack>
       <PlayerNameCard
         title={t('playerOne')}
         name={players[0].name}
