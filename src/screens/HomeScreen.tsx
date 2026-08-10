@@ -2,11 +2,11 @@ import { BookOpen, Play, Settings, Trophy } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import { BrandWaveMark } from '@/components/BrandWaveMark';
 import { Card } from '@/components/Card';
 import { PartyButton } from '@/components/PartyButton';
 import { ScreenShell } from '@/components/ScreenShell';
 import { StatCard } from '@/components/StatCard';
-import { WaveformBars } from '@/components/WaveformBars';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { theme } from '@/theme';
@@ -19,12 +19,9 @@ export function HomeScreen() {
   return (
     <ScreenShell scroll={false}>
       <View style={styles.hero}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>V</Text>
-        </View>
+        <BrandWaveMark size={104} style={[styles.logo, { alignSelf: isRTL ? 'flex-end' : 'flex-start' }]} />
         <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{t('appName')}</Text>
         <Text style={[styles.tagline, { textAlign: isRTL ? 'right' : 'left' }]}>{t('homeQuestion')}</Text>
-        <WaveformBars active color={theme.colors.lemon} />
       </View>
 
       <View style={styles.actions}>
@@ -54,18 +51,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logo: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.lemon,
-    borderRadius: 8,
-    height: 72,
-    justifyContent: 'center',
     marginBottom: theme.spacing.lg,
-    width: 72,
-  },
-  logoText: {
-    color: theme.colors.ink,
-    fontSize: 48,
-    fontWeight: '900',
   },
   title: {
     color: theme.colors.white,
