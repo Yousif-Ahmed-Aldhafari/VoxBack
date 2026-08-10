@@ -22,19 +22,31 @@ type RecordingPanelProps = {
   onConfirm: (result: RecordingResult) => void | Promise<void>;
 };
 
+type CountdownValue = 3 | 2 | 1 | 'go';
 type FinalizeReason = 'manual' | 'max-duration';
+type PanelRecordingState = 'idle' | 'countdown' | 'recording' | 'stopping' | 'recorded' | 'error';
+
+const COUNTDOWN_STEPS: CountdownValue[] = [3, 2, 1];
+const COUNTDOWN_STEP_MS = 1000;
+const COUNTDOWN_RECORD_MS = 380;
+const COUNTDOWN_ANIMATION_MS = 260;
+const COUNTDOWN_WAVEFORM_OPACITY = 0.2;
 
 export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabel, confirmLabel, onConfirm }: RecordingPanelProps) {
   const { t, isRTL } = useTranslation();
   const feedback = useFeedback();
   const quality = useSettingsStore((state) => state.recordingQuality);
   const recorder = useAudioRecordingService({ quality, maxDurationSeconds });
-  const [countdown, setCountdown] = useState<number | 'go' | undefined>();
+  const [countdown, setCountdown] = useState<CountdownValue | undefined>();
   const [isStopping, setIsStopping] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [micScale] = useState(() => new Animated.Value(1));
+  const [countdownAnim] = useState(() => new Animated.Value(0));
   const playbackRef = useRef<AudioClipControlsHandle>(null);
   const isStoppingRef = useRef(false);
+  const countdownRunRef = useRef(0);
+  const isCountdownRunningRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     if (!recorder.isRecording) {
@@ -50,28 +62,70 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
     return () => loop.stop();
   }, [micScale, recorder.isRecording]);
 
-  async function startWithCountdown() {
-    if (countdown !== undefined || recorder.status === 'recording' || recorder.status === 'stopping') {
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      isCountdownRunningRef.current = false;
+      countdownRunRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (countdown === undefined) {
       return;
     }
-    setCountdown(3);
-    void feedback('countdown');
-    await wait(420);
-    setCountdown(2);
-    void feedback('countdown');
-    await wait(420);
-    setCountdown(1);
-    void feedback('countdown');
-    await wait(420);
-    setCountdown('go');
-    await wait(260);
-    setCountdown(undefined);
-    try {
-      void feedback('recordStart');
-      await recorder.start();
-    } catch (error) {
-      handleRecordingError(error);
+    countdownAnim.stopAnimation();
+    countdownAnim.setValue(0);
+    Animated.timing(countdownAnim, {
+      toValue: 1,
+      duration: COUNTDOWN_ANIMATION_MS,
+      useNativeDriver: true,
+    }).start();
+  }, [countdown, countdownAnim]);
+
+  async function startWithCountdown() {
+    if (isCountdownRunningRef.current || recorder.status === 'recording' || recorder.status === 'stopping' || recorder.status === 'recorded') {
+      return;
     }
+    const runId = countdownRunRef.current + 1;
+    countdownRunRef.current = runId;
+    isCountdownRunningRef.current = true;
+    try {
+      for (const step of COUNTDOWN_STEPS) {
+        if (!isCountdownRunActive(runId)) {
+          return;
+        }
+        setCountdown(step);
+        void feedback('countdown');
+        await wait(COUNTDOWN_STEP_MS);
+      }
+      if (!isCountdownRunActive(runId)) {
+        return;
+      }
+      setCountdown('go');
+      await wait(COUNTDOWN_RECORD_MS);
+      if (!isCountdownRunActive(runId)) {
+        return;
+      }
+      setCountdown(undefined);
+      await recorder.start();
+      if (isCountdownRunActive(runId)) {
+        void feedback('recordStart');
+      }
+    } catch (error) {
+      if (isCountdownRunActive(runId)) {
+        handleRecordingError(error);
+      }
+    } finally {
+      if (isCountdownRunActive(runId)) {
+        setCountdown(undefined);
+      }
+      isCountdownRunningRef.current = false;
+    }
+  }
+
+  function isCountdownRunActive(runId: number) {
+    return isMountedRef.current && countdownRunRef.current === runId;
   }
 
   const handleRecordingError = useCallback(
@@ -100,7 +154,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
       isStoppingRef.current = true;
       setIsStopping(true);
       try {
-        const result = await recorder.stop();
+        const result = await recorder.stop(reason === 'max-duration' ? maxDurationSeconds * 1000 : undefined);
         if (!result?.uri) {
           throw new Error('Recording URI was not returned.');
         }
@@ -113,7 +167,7 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
         setIsStopping(false);
       }
     },
-    [feedback, handleRecordingError, recorder],
+    [feedback, handleRecordingError, maxDurationSeconds, recorder],
   );
 
   useEffect(() => {
@@ -150,19 +204,30 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
     }
   }
 
-  const seconds = Math.min(maxDurationSeconds, recorder.durationMs / 1000);
+  const displayedDurationMs = Math.min(maxDurationSeconds * 1000, recorder.durationMs);
+  const seconds = displayedDurationMs / 1000;
   const progress = Math.min(1, seconds / maxDurationSeconds);
-  const isCountdown = countdown !== undefined;
-  const isRecording = recorder.status === 'recording';
-  const isFinalizing = isStopping || recorder.status === 'stopping';
+  const recordingState: PanelRecordingState = countdown !== undefined ? 'countdown' : isStopping ? 'stopping' : recorder.status;
+  const isCountdown = recordingState === 'countdown';
+  const isRecording = recordingState === 'recording';
+  const isFinalizing = recordingState === 'stopping';
   const showActiveRecording = isRecording || isFinalizing;
+  const countdownText = countdown === 'go' ? t('recordNow').toUpperCase() : countdown;
+  const countdownScale = countdownAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.88, 1],
+  });
+  const countdownOpacity = countdownAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   if (recorder.status === 'recorded' && recorder.result) {
     return (
       <Card tint="dark" style={styles.card}>
         <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{playbackLabel}</Text>
         <WaveformBars levels={recorder.result.levels} active={false} color={theme.colors.mint} />
-        <Text style={styles.recordedDuration}>{formatDurationMs(recorder.result.durationMs)}</Text>
+        <Text style={styles.recordedDuration}>{formatClockMs(recorder.result.durationMs)}</Text>
         <AudioClipControls ref={playbackRef} durationMs={recorder.result.durationMs} playLabel={t('playRecording')} uri={recorder.result.uri} />
         <View style={[styles.actions, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <PartyButton compact disabled={isConfirming} title={t('recordAgain')} icon={Mic} variant="secondary" onPress={recordAgain} />
@@ -177,17 +242,35 @@ export function RecordingPanel({ title, prompt, maxDurationSeconds, playbackLabe
       <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{showActiveRecording ? t('recording') : title}</Text>
       {showActiveRecording ? null : <Text style={[styles.prompt, { textAlign: isRTL ? 'right' : 'left' }]}>{prompt}</Text>}
 
-      <View style={styles.micStage}>
-        <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
-          <Mic color={theme.colors.ink} size={58} strokeWidth={2.5} />
+      {isCountdown ? null : (
+        <View style={styles.micStage}>
+          <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
+            <Mic color={theme.colors.ink} size={58} strokeWidth={2.5} />
+          </Animated.View>
+        </View>
+      )}
+
+      <View style={styles.waveformStage}>
+        <Animated.View style={[styles.waveformLayer, { opacity: isCountdown ? COUNTDOWN_WAVEFORM_OPACITY : 1 }]}>
+          <WaveformBars levels={isCountdown ? undefined : recorder.levels} active={isRecording && !isFinalizing} color={isRecording && !isFinalizing ? theme.colors.coral : theme.colors.mint} />
         </Animated.View>
-        {countdown !== undefined ? <Text style={styles.countdown}>{countdown === 'go' ? t('recordNow') : countdown}</Text> : null}
+        {isCountdown ? (
+          <Animated.Text
+            style={[
+              styles.countdown,
+              {
+                opacity: countdownOpacity,
+                transform: [{ scale: countdownScale }],
+              },
+            ]}
+          >
+            {countdownText}
+          </Animated.Text>
+        ) : null}
       </View>
 
-      <WaveformBars levels={recorder.levels} active={isRecording && !isFinalizing} color={isRecording && !isFinalizing ? theme.colors.coral : theme.colors.mint} />
-
       <View style={styles.timerWrap}>
-        <Text style={styles.timer}>{seconds.toFixed(1)}s</Text>
+        <Text style={styles.timer}>{formatClockMs(displayedDurationMs)}</Text>
         <Text style={styles.max}>{t('maxDuration', { seconds: maxDurationSeconds })}</Text>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
@@ -214,12 +297,11 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function formatDurationMs(durationMs: number) {
-  const totalTenths = Math.max(0, Math.round(durationMs / 100));
-  const minutes = Math.floor(totalTenths / 600);
-  const seconds = Math.floor((totalTenths % 600) / 10);
-  const tenths = totalTenths % 10;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${tenths}`;
+function formatClockMs(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 const styles = StyleSheet.create({
@@ -243,6 +325,15 @@ const styles = StyleSheet.create({
     minHeight: 124,
     justifyContent: 'center',
   },
+  waveformStage: {
+    alignItems: 'center',
+    height: 112,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  waveformLayer: {
+    alignSelf: 'stretch',
+  },
   micButton: {
     alignItems: 'center',
     backgroundColor: theme.colors.lemon,
@@ -253,7 +344,7 @@ const styles = StyleSheet.create({
   },
   countdown: {
     color: theme.colors.white,
-    fontSize: theme.typography.h1,
+    fontSize: 56,
     fontWeight: '900',
     letterSpacing: 0,
     position: 'absolute',

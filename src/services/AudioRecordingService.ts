@@ -116,7 +116,7 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     setStatus('idle');
   }, []);
 
-  const stop = useCallback(async () => {
+  const stop = useCallback(async (finalDurationMs?: number) => {
     if (stopPromiseRef.current) {
       return stopPromiseRef.current;
     }
@@ -135,7 +135,7 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
         await recorder.stop();
         await setAudioModeAsync({ allowsRecording: false });
         const recorderStatus = await waitForRecordingFile(recorder, previousRecordingUriRef.current);
-        const rawDuration = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
+        const rawDuration = finalDurationMs ?? (recorderStatus.durationMillis || Date.now() - startedAtRef.current);
         const duration = Math.min(rawDuration, maxDurationSeconds * 1000);
         setDurationMs(duration);
         if (!isRecordingDurationValid(duration, minDurationMs, maxDurationSeconds)) {
