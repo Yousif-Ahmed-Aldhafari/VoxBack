@@ -2,7 +2,7 @@ import { Home, RotateCcw, Users } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import ViewShot, { captureRef, type ViewShotRef } from 'react-native-view-shot';
+import ViewShot, { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 
 import { Card } from '@/components/Card';
@@ -19,7 +19,7 @@ import { theme } from '@/theme';
 
 export function FinalResultsScreen() {
   const router = useRouter();
-  const shareRef = useRef<ViewShotRef>(null);
+  const shareRef = useRef<ViewShot>(null);
   const { t, isRTL, language } = useTranslation();
   const game = useGameStore((state) => state.game);
   const restartSamePlayers = useGameStore((state) => state.restartSamePlayers);

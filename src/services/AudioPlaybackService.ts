@@ -59,7 +59,7 @@ function playOne(uri: string) {
   return new Promise<void>((resolve) => {
     const player = createAudioPlayer({ uri }, { updateInterval: 80 });
     const poll = setInterval(() => {
-      if (player.currentStatus.didJustFinish || player.currentStatus.error) {
+      if (player.currentStatus.didJustFinish) {
         clearInterval(poll);
         player.pause();
         resolve();

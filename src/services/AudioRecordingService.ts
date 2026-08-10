@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { requestRecordingPermissionsAsync, useAudioStream } from 'expo-audio';
+import {
+  AudioQuality,
+  IOSOutputFormat,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  type RecordingOptions,
+} from 'expo-audio';
 
-import { writeBytesToCache } from './AudioFileService';
-import { calculateRms, concatenateInt16, encodeWav } from './WavAudio';
 import { isRecordingDurationValid } from '@/utils/recordingValidation';
 import type { RecordingQuality } from '@/types';
 
@@ -31,36 +36,43 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
   const [levels, setLevels] = useState<number[]>([]);
   const [result, setResult] = useState<RecordingResult | undefined>();
   const [error, setError] = useState<Error | undefined>();
-  const chunksRef = useRef<Int16Array[]>([]);
-  const sampleRateRef = useRef(quality === 'high' ? 48000 : 24000);
-  const channelsRef = useRef(1);
   const startedAtRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latestStopRef = useRef<(() => Promise<RecordingResult | undefined>) | undefined>(undefined);
 
   const requestedSampleRate = quality === 'high' ? 48000 : 24000;
+  const bitRate = quality === 'high' ? 256000 : 128000;
 
-  const onBuffer = useCallback((buffer: { data: ArrayBuffer; sampleRate: number; channels: number }) => {
-    const chunk = new Int16Array(buffer.data.slice(0));
-    chunksRef.current.push(chunk);
-    sampleRateRef.current = buffer.sampleRate;
-    channelsRef.current = buffer.channels;
-    const rms = calculateRms(chunk);
-    setLevels((current) => [...current.slice(-23), Math.min(1, rms * 14)]);
-  }, []);
-
-  const { stream, isStreaming } = useAudioStream(
-    useMemo(
-      () => ({
+  const recordingOptions = useMemo<RecordingOptions>(
+    () => ({
+      isMeteringEnabled: true,
+      extension: '.wav',
+      sampleRate: requestedSampleRate,
+      numberOfChannels: 1,
+      bitRate,
+      ios: {
+        extension: '.wav',
+        outputFormat: IOSOutputFormat.LINEARPCM,
+        audioQuality: quality === 'high' ? AudioQuality.MAX : AudioQuality.HIGH,
         sampleRate: requestedSampleRate,
-        channels: 1,
-        encoding: 'int16' as const,
-        onBuffer,
-      }),
-      [onBuffer, requestedSampleRate],
-    ),
+        linearPCMBitDepth: 16,
+        linearPCMIsBigEndian: false,
+        linearPCMIsFloat: false,
+      },
+      android: {
+        extension: '.m4a',
+        outputFormat: 'mpeg4',
+        audioEncoder: 'aac',
+      },
+      web: {
+        mimeType: 'audio/wav',
+        bitsPerSecond: bitRate,
+      },
+    }),
+    [bitRate, quality, requestedSampleRate],
   );
+  const recorder = useAudioRecorder(recordingOptions);
 
   const clearTimers = useCallback(() => {
     if (timerRef.current) {
@@ -74,7 +86,6 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
   }, []);
 
   const reset = useCallback(() => {
-    chunksRef.current = [];
     setDurationMs(0);
     setLevels([]);
     setResult(undefined);
@@ -83,12 +94,14 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
   }, []);
 
   const stop = useCallback(async () => {
-    if (status !== 'recording' && !stream.isStreaming) {
+    if (status !== 'recording' && !recorder.isRecording) {
       return result;
     }
     clearTimers();
-    stream.stop();
-    const duration = Date.now() - startedAtRef.current;
+    await recorder.stop();
+    await setAudioModeAsync({ allowsRecording: false });
+    const recorderStatus = recorder.getStatus();
+    const duration = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
     setDurationMs(duration);
     if (!isRecordingDurationValid(duration, minDurationMs, maxDurationSeconds)) {
       const tooShort = new RecordingTooShortError('Recording is too short.');
@@ -96,25 +109,24 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
       setStatus('error');
       throw tooShort;
     }
-    const samples = concatenateInt16(chunksRef.current);
-    const bytes = encodeWav({
-      sampleRate: sampleRateRef.current,
-      channels: channelsRef.current,
-      bitsPerSample: 16,
-      samples,
-    });
-    const uri = await writeBytesToCache(bytes, 'recording');
+    const uri = recorder.uri ?? recorderStatus.url;
+    if (!uri) {
+      const recordingError = new Error('Recording failed to produce an audio file.');
+      setError(recordingError);
+      setStatus('error');
+      throw recordingError;
+    }
     const nextResult = {
       uri,
       durationMs: duration,
-      sampleRate: sampleRateRef.current,
-      channels: channelsRef.current,
+      sampleRate: requestedSampleRate,
+      channels: 1,
       levels,
     };
     setResult(nextResult);
     setStatus('recorded');
     return nextResult;
-  }, [clearTimers, levels, maxDurationSeconds, minDurationMs, result, status, stream]);
+  }, [clearTimers, levels, maxDurationSeconds, minDurationMs, recorder, requestedSampleRate, result, status]);
 
   useEffect(() => {
     latestStopRef.current = stop;
@@ -129,30 +141,36 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
       setStatus('error');
       throw permissionError;
     }
+    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    await recorder.prepareToRecordAsync(recordingOptions);
     setStatus('recording');
     startedAtRef.current = Date.now();
-    await stream.start();
+    recorder.record();
     timerRef.current = setInterval(() => {
-      setDurationMs(Date.now() - startedAtRef.current);
+      const recorderStatus = recorder.getStatus();
+      const elapsed = recorderStatus.durationMillis || Date.now() - startedAtRef.current;
+      setDurationMs(elapsed);
+      setLevels((current) => [...current.slice(-23), meteringToLevel(recorderStatus.metering, elapsed)]);
     }, 80);
     stopTimeoutRef.current = setTimeout(() => {
       void latestStopRef.current?.();
     }, maxDurationSeconds * 1000);
-  }, [maxDurationSeconds, reset, stream]);
+  }, [maxDurationSeconds, recorder, recordingOptions, reset]);
 
-  const cancel = useCallback(() => {
+  const cancel = useCallback(async () => {
     clearTimers();
-    if (stream.isStreaming) {
-      stream.stop();
+    if (recorder.isRecording) {
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
     }
     reset();
-  }, [clearTimers, reset, stream]);
+  }, [clearTimers, recorder, reset]);
 
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   return {
     status,
-    isStreaming,
+    isStreaming: recorder.isRecording,
     isRecording: status === 'recording',
     durationMs,
     levels,
@@ -163,4 +181,11 @@ export function useAudioRecordingService({ quality, maxDurationSeconds, minDurat
     cancel,
     reset,
   };
+}
+
+function meteringToLevel(metering: number | undefined, elapsedMs: number) {
+  if (typeof metering === 'number' && Number.isFinite(metering)) {
+    return Math.max(0.04, Math.min(1, (metering + 60) / 60));
+  }
+  return 0.18 + Math.abs(Math.sin(elapsedMs / 140)) * 0.56;
 }
