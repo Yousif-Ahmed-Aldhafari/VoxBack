@@ -22,8 +22,13 @@ type RecordingPanelProps = {
   onConfirm: (result: RecordingResult) => void | Promise<void>;
 };
 
+type PrepareToLeaveOptions = {
+  discardCompletedRecording?: boolean;
+};
+
 export type RecordingPanelHandle = {
-  prepareToLeave: () => Promise<void>;
+  hasCompletedRecording: () => boolean;
+  prepareToLeave: (options?: PrepareToLeaveOptions) => Promise<void>;
 };
 
 type CountdownValue = 3 | 2 | 1;
@@ -196,10 +201,13 @@ export const RecordingPanel = forwardRef<RecordingPanelHandle, RecordingPanelPro
     [feedback, handleRecordingError, maxDurationSeconds, recorder],
   );
 
-  const prepareToLeave = useCallback(async () => {
+  const hasCompletedRecording = useCallback(() => recorder.status === 'recorded' && Boolean(recorder.result?.uri), [recorder.result?.uri, recorder.status]);
+
+  const prepareToLeave = useCallback(async ({ discardCompletedRecording = false }: PrepareToLeaveOptions = {}) => {
     if (isLeavingRef.current) {
       return;
     }
+    const completedRecordingUri = hasCompletedRecording() ? recorder.result?.uri : undefined;
     isLeavingRef.current = true;
     countdownRunRef.current += 1;
     isCountdownRunningRef.current = false;
@@ -213,10 +221,12 @@ export const RecordingPanel = forwardRef<RecordingPanelHandle, RecordingPanelPro
     await startPromiseRef.current?.catch(() => undefined);
     startPromiseRef.current = undefined;
     await recorder.cancel().catch(() => undefined);
-    await deleteIfExists(recorder.result?.uri).catch(() => undefined);
-  }, [countdownAnim, recorder]);
+    if (discardCompletedRecording) {
+      await deleteIfExists(completedRecordingUri).catch(() => undefined);
+    }
+  }, [countdownAnim, hasCompletedRecording, recorder]);
 
-  useImperativeHandle(ref, () => ({ prepareToLeave }), [prepareToLeave]);
+  useImperativeHandle(ref, () => ({ hasCompletedRecording, prepareToLeave }), [hasCompletedRecording, prepareToLeave]);
 
   useEffect(() => {
     if (recorder.status !== 'recording') {
