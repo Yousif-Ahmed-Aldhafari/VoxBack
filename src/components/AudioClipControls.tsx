@@ -1,4 +1,4 @@
-import { Pause, Play, RotateCcw, StepBack, StepForward } from 'lucide-react-native';
+import { Pause, Play, StepBack, StepForward } from 'lucide-react-native';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PartyButton } from './PartyButton';
@@ -42,7 +42,6 @@ export function AudioClipControls({ uri, label }: AudioClipControlsProps) {
         <Pressable style={styles.iconButton} onPress={() => safe(() => playback.seekBy(0.75))}>
           <StepForward color={theme.colors.white} size={20} />
         </Pressable>
-        <PartyButton compact title={t('restart')} icon={RotateCcw} variant="ghost" onPress={() => safe(playback.restart)} />
       </View>
     </View>
   );
