@@ -1,15 +1,5 @@
 import type { ReactNode } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type TextStyle,
-  type ViewStyle,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -28,9 +18,6 @@ type ScreenShellProps = {
   bounces?: boolean;
   showBack?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
-  headerStyle?: StyleProp<ViewStyle>;
-  titleStyle?: StyleProp<TextStyle>;
-  subtitleStyle?: StyleProp<TextStyle>;
 };
 
 export function ScreenShell({
@@ -42,9 +29,6 @@ export function ScreenShell({
   bounces = false,
   showBack = false,
   contentStyle,
-  headerStyle,
-  titleStyle,
-  subtitleStyle,
 }: ScreenShellProps) {
   const router = useRouter();
   const { isRTL, t } = useTranslation();
@@ -62,9 +46,9 @@ export function ScreenShell({
         </View>
       ) : null}
       {title ? (
-        <View style={[styles.header, headerStyle]}>
-          <Text style={[styles.title, titleStyle, { textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
-          {subtitle ? <Text style={[styles.subtitle, subtitleStyle, { textAlign: isRTL ? 'right' : 'left' }]}>{subtitle}</Text> : null}
+        <View style={styles.header}>
+          <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
+          {subtitle ? <Text style={[styles.subtitle, { textAlign: isRTL ? 'right' : 'left' }]}>{subtitle}</Text> : null}
         </View>
       ) : null}
       {children}
@@ -77,7 +61,7 @@ export function ScreenShell({
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboard}>
           {scroll ? (
             <ScrollView
-              alwaysBounceVertical={bounces}
+              alwaysBounceVertical={false}
               bounces={bounces}
               contentContainerStyle={[styles.scrollContent, contentStyle]}
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}

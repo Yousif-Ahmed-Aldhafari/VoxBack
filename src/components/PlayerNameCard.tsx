@@ -11,16 +11,14 @@ type PlayerNameCardProps = {
   avatar?: string;
   onNameChange: (name: string) => void;
   onAvatarChange: (avatar: string) => void;
-  compact?: boolean;
-  dense?: boolean;
 };
 
-export function PlayerNameCard({ title, name, avatar, onNameChange, onAvatarChange, compact = false, dense = false }: PlayerNameCardProps) {
+export function PlayerNameCard({ title, name, avatar, onNameChange, onAvatarChange }: PlayerNameCardProps) {
   const { isRTL, t } = useTranslation();
   return (
-    <Card tint="warm" style={[styles.card, compact ? styles.compactCard : null, dense ? styles.denseCard : null]}>
+    <Card tint="warm" style={styles.card}>
       <View style={[styles.heading, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-        <Text style={[styles.avatar, compact ? styles.compactAvatar : null, dense ? styles.denseAvatar : null]}>{avatar}</Text>
+        <Text style={styles.avatar}>{avatar}</Text>
         <Text style={[styles.title, { textAlign: isRTL ? 'right' : 'left' }]}>{title}</Text>
       </View>
       <Text style={[styles.label, { textAlign: isRTL ? 'right' : 'left' }]}>{t('playerName')}</Text>
@@ -31,9 +29,9 @@ export function PlayerNameCard({ title, name, avatar, onNameChange, onAvatarChan
         placeholder={title}
         placeholderTextColor={theme.colors.textMuted}
         returnKeyType="done"
-        style={[styles.input, compact ? styles.compactInput : null, dense ? styles.denseInput : null, { textAlign: isRTL ? 'right' : 'left' }]}
+        style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
       />
-      <AvatarPicker compact={compact} dense={dense} label={t('avatar')} value={avatar} onChange={onAvatarChange} />
+      <AvatarPicker label={t('avatar')} value={avatar} onChange={onAvatarChange} />
     </Card>
   );
 }
@@ -42,26 +40,12 @@ const styles = StyleSheet.create({
   card: {
     gap: theme.spacing.md,
   },
-  compactCard: {
-    gap: theme.spacing.xs,
-    padding: theme.spacing.sm,
-  },
-  denseCard: {
-    gap: 3,
-    padding: 6,
-  },
   heading: {
     alignItems: 'center',
     gap: theme.spacing.sm,
   },
   avatar: {
     fontSize: 28,
-  },
-  compactAvatar: {
-    fontSize: 23,
-  },
-  denseAvatar: {
-    fontSize: 22,
   },
   title: {
     color: theme.colors.ink,
@@ -84,12 +68,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     minHeight: 48,
     paddingHorizontal: theme.spacing.md,
-  },
-  compactInput: {
-    minHeight: 40,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  denseInput: {
-    minHeight: 38,
   },
 });
